@@ -1,0 +1,20 @@
+app = "dns-firewall"
+primary_region = "ams"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8053
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 53
+    handlers = ["dns"]

@@ -1,6 +1,3 @@
-# syntax=docker/dockerfile:1
-ARG TARGETARCH
-
 # ---- Build frontend ----
 FROM node:22-alpine AS frontend-builder
 WORKDIR /build/frontend
@@ -11,11 +8,12 @@ RUN npm run build
 
 # ---- Build Go backend ----
 FROM golang:1.26-alpine AS backend-builder
-ARG TARGETARCH
 WORKDIR /build
-COPY backend/ ./backend/
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ .
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -o dns-firewall ./backend/
+RUN CGO_ENABLED=0 GOOS=linux go build -o dns-firewall .
 
 # ---- Runtime ----
 FROM alpine:3.21

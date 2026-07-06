@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type Database struct {
@@ -13,7 +13,7 @@ type Database struct {
 }
 
 func NewDatabase(path string) (*Database, error) {
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +112,20 @@ func (d *Database) GetStats() Stats {
 			var tb TimeBucket
 			rows3.Scan(&tb.Hour, &tb.Total, &tb.Blocked)
 			s.QueriesLast24 = append(s.QueriesLast24, tb)
+		}
+	}
+
+	rows4, err := d.db.Query(`
+		SELECT client_ip, COUNT(*) as cnt FROM query_logs
+		WHERE blocked = 1 AND timestamp > datetime('now', '-24 hours')
+		GROUP BY client_ip ORDER BY cnt DESC LIMIT 10
+	`)
+	if err == nil {
+		defer rows4.Close()
+		for rows4.Next() {
+			var cc ClientCount
+			rows4.Scan(&cc.ClientIP, &cc.Count)
+			s.TopBlockedClients = append(s.TopBlockedClients, cc)
 		}
 	}
 

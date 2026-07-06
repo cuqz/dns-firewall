@@ -5,12 +5,10 @@ interface QueryLogProps {
 }
 
 function formatTime(ts: string) {
-  try {
-    const d = new Date(ts)
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-  } catch {
-    return ts
-  }
+  if (!ts) return '--'
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return '--'
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
 
 function truncateDomain(domain: string, max = 40) {

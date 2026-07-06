@@ -4,12 +4,22 @@
 
 @layer base {
   * { @apply border-border; }
-  body { @apply bg-surface text-text-primary antialiased; }
+  body {
+    @apply bg-surface text-text-primary antialiased;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
 }
 
 @layer components {
   .card {
-    @apply bg-surface-light border border-border rounded-[10px] p-5;
+    @apply bg-surface-light border border-border rounded-[10px] p-5 transition-all duration-300;
+  }
+  .card:hover {
+    @apply border-[#333336];
+    box-shadow: 0 0 0 1px rgba(49, 146, 154, 0.06);
   }
   .stat-value {
     @apply text-2xl md:text-3xl font-semibold tracking-tight;

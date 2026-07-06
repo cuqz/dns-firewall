@@ -8,6 +8,10 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   </head>
   <body class="bg-surface text-text-primary font-sans">
+    <svg class="fixed inset-0 w-full h-full pointer-events-none z-50 opacity-[0.025]" style="mix-blend-mode: overlay;">
+      <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter>
+      <rect width="100%" height="100%" filter="url(#grain)"/>
+    </svg>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,0 +1,29 @@
+services:
+  dns-firewall:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dns-firewall
+    restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE
+      - NET_ADMIN
+    ports:
+      - "53:8053/udp"
+      - "53:8053/tcp"
+      - "80:8080"
+    environment:
+      - DNS_ADDR=:8053
+      - UPSTREAM=1.1.1.1:53
+      - API_ADDR=:8080
+      - FRONTEND_DIR=/app/frontend/dist
+    volumes:
+      - dns-firewall-data:/app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  dns-firewall-data:

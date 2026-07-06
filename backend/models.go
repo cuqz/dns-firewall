@@ -13,12 +13,13 @@ type QueryLog struct {
 }
 
 type Stats struct {
-	TotalQueries  int64            `json:"total_queries"`
-	BlockedCount  int64            `json:"blocked_count"`
-	BlockedPct    float64          `json:"blocked_pct"`
-	TopDomains    []DomainCount    `json:"top_domains"`
-	TopClients    []ClientCount    `json:"top_clients"`
-	QueriesLast24 []TimeBucket     `json:"queries_last_24h"`
+	TotalQueries     int64            `json:"total_queries"`
+	BlockedCount     int64            `json:"blocked_count"`
+	BlockedPct       float64          `json:"blocked_pct"`
+	TopDomains       []DomainCount    `json:"top_domains"`
+	TopClients       []ClientCount    `json:"top_clients"`
+	TopBlockedClients []ClientCount   `json:"top_blocked_clients"`
+	QueriesLast24    []TimeBucket     `json:"queries_last_24h"`
 }
 
 type DomainCount struct {

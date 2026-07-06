@@ -13,12 +13,10 @@ interface TimeChartProps {
 }
 
 function formatHour(hour: string) {
-  try {
-    const d = new Date(hour)
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
-  } catch {
-    return hour
-  }
+  if (!hour) return '--'
+  const d = new Date(hour)
+  if (isNaN(d.getTime())) return hour
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {

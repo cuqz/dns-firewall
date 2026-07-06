@@ -49,11 +49,12 @@ func (s *DNSServer) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 		s.clients.Broadcast(WSMessage{
 			Type: "query",
 			Data: map[string]interface{}{
-				"client_ip": clientIP,
-				"domain":    domain,
-				"type":      dns.TypeToString[q.Qtype],
-				"blocked":   true,
-				"duration":  duration,
+				"client_ip":  clientIP,
+				"domain":     domain,
+				"type":       dns.TypeToString[q.Qtype],
+				"blocked":    true,
+				"duration":   duration,
+				"timestamp":  time.Now().UTC().Format(time.RFC3339),
 			},
 		})
 
@@ -83,11 +84,12 @@ func (s *DNSServer) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 	s.clients.Broadcast(WSMessage{
 		Type: "query",
 		Data: map[string]interface{}{
-			"client_ip": clientIP,
-			"domain":    domain,
-			"type":      dns.TypeToString[q.Qtype],
-			"blocked":   false,
-			"duration":  duration,
+			"client_ip":  clientIP,
+			"domain":     domain,
+			"type":       dns.TypeToString[q.Qtype],
+			"blocked":    false,
+			"duration":   duration,
+			"timestamp":  time.Now().UTC().Format(time.RFC3339),
 		},
 	})
 

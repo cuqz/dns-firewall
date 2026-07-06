@@ -4,8 +4,9 @@ import { StatsCard } from './components/StatsCard'
 import { QueryLog } from './components/QueryLog'
 import { TopDomains } from './components/TopDomains'
 import { TopClients } from './components/TopClients'
+import { TopBlockedClients } from './components/TopBlockedClients'
 import { TimeChart } from './components/TimeChart'
-import { Shield, Activity, Clock, ListFilter } from 'lucide-react'
+import { Shield, Activity, Clock, ListFilter, Gauge } from 'lucide-react'
 
 export default function App() {
   const { data } = useDashboard()
@@ -14,15 +15,14 @@ export default function App() {
 
   const stats = data?.stats
   const navItems = [
-    { id: 'overview' as const, label: 'Overview', icon: Activity },
+    { id: 'overview' as const, label: 'Overview', icon: Gauge },
     { id: 'queries' as const, label: 'Live Log', icon: Clock },
     { id: 'blocklist' as const, label: 'Blocklist', icon: ListFilter },
   ]
 
   return (
     <div className="min-h-screen bg-surface">
-      {/* Header */}
-      <header className="border-b border-border bg-surface-light sticky top-0 z-50">
+      <header className="border-b border-border bg-surface-light/90 sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 md:h-16">
             <div className="flex items-center gap-3">
@@ -40,11 +40,12 @@ export default function App() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
               </span>
-              <span className="text-[10px] text-muted hidden sm:inline">Active</span>
+              <span className="text-[10px] text-muted hidden sm:inline">
+                {data ? `${data.blocklist_domains.toLocaleString()} blocked` : 'Active'}
+              </span>
             </div>
           </div>
 
-          {/* Nav tabs */}
           <nav className="flex gap-1 -mb-px">
             {navItems.map((item) => {
               const Icon = item.icon
@@ -67,16 +68,16 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8 py-6">
+      <main className="max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8 py-6 md:py-8">
         {activeTab === 'overview' && (
-          <div className="space-y-6 animate-slide-in">
+          <div className="space-y-6 md:space-y-8 animate-slide-in">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatsCard
                 label="Total Queries (24h)"
                 value={stats?.total_queries?.toLocaleString() ?? '—'}
                 icon={Activity}
-                trend={stats?.total_queries ? `${stats.blocklist_domains} domains blocked` : ''}
+                trend={stats?.total_queries ? `${stats.blocked_count.toLocaleString()} blocked` : ''}
               />
               <StatsCard
                 label="Blocked"
@@ -119,10 +120,11 @@ export default function App() {
               <TimeChart data={stats?.queries_last_24h ?? []} />
             </div>
 
-            {/* Bottom grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Bottom grid: domains, clients, blocked-by-device */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <TopDomains domains={stats?.top_domains ?? []} />
               <TopClients clients={stats?.top_clients ?? []} />
+              <TopBlockedClients clients={stats?.top_blocked_clients ?? []} />
             </div>
           </div>
         )}
@@ -141,7 +143,7 @@ export default function App() {
                 <span className="text-[10px] text-muted">{data?.blocklist_domains?.toLocaleString() ?? '—'} domains</span>
               </div>
               <div className="text-xs text-muted">
-                 Blocklist loaded at startup. Add domains to <code className="text-accent">backend/blocklists/default.txt</code> and restart.
+                Blocklist loaded at startup. Add domains to <code className="text-accent">backend/blocklists/default.txt</code> and restart.
               </div>
             </div>
           </div>

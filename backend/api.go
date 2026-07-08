@@ -91,7 +91,12 @@ func (a *API) RegisterRoutes(mux *http.ServeMux) {
 
 func (a *API) handleStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	stats := a.db.GetStats()
+
+	// Parse optional date range from query params
+	since := r.URL.Query().Get("since")
+	until := r.URL.Query().Get("until")
+
+	stats := a.db.GetStats(since, until)
 	total, updated := a.firewall.Stat()
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"stats":            stats,

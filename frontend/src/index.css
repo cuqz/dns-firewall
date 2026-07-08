@@ -5,50 +5,68 @@
 @layer base {
   * { @apply border-border; }
   body {
-    @apply bg-surface text-text-primary antialiased;
-    background-image:
-      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
-    background-size: 60px 60px;
+    @apply bg-[#0a0a0f] text-[#e8e8ee] antialiased font-sans;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-surface-light border border-border rounded-[10px] p-5 transition-all duration-300;
+    @apply bg-[#111118] border border-[rgba(255,255,255,0.06)] rounded-xl p-5 transition-all duration-300;
   }
   .card:hover {
-    @apply border-[#333336];
-    box-shadow: 0 0 0 1px rgba(49, 146, 154, 0.06);
+    @apply border-[rgba(74,158,255,0.15)];
   }
   .stat-value {
     @apply text-2xl md:text-3xl font-semibold tracking-tight;
   }
   .stat-label {
-    @apply text-xs text-muted uppercase tracking-wider font-medium;
+    @apply text-xs text-[#888] uppercase tracking-wider font-medium;
   }
-  .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider;
+  .badge-blocked {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #ff6b6b;
+    background: rgba(255,107,107,0.1);
+    border: 1px solid rgba(255,107,107,0.2);
   }
-  .badge-green { @apply badge bg-[#3fb950]/10 text-[#3fb950]; }
-  .badge-red { @apply badge bg-[#f85149]/10 text-[#f85149]; }
-  .badge-blue { @apply badge bg-[#31929A]/10 text-[#31929A]; }
+  .badge-allowed {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #22c55e;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.2);
+  }
+}
 
-  .table-header {
-    @apply text-[10px] text-muted uppercase tracking-widest font-semibold pb-2 border-b border-border;
-  }
-  .table-cell {
-    @apply py-2 text-xs md:text-sm;
-  }
+/* Dark dropdowns — native select needs explicit option styling */
+select option {
+  background: #131318;
+  color: #e8e8f0;
 }
 
 @keyframes slide-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-slide-in {
-  animation: slide-in 0.3s ease-out;
+  animation: slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
 
 .log-row-enter {
   animation: slide-in 0.2s ease-out;

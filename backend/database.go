@@ -96,11 +96,15 @@ func (d *Database) LogQuery(clientIP, domain, queryType string, blocked bool, du
 	go d.resolveHostname(clientIP)
 }
 
-func (d *Database) GetStats() Stats {
+func (d *Database) GetStats(since, until string) Stats {
 	var s Stats
 
-	d.db.QueryRow("SELECT COUNT(*) FROM query_logs").Scan(&s.TotalQueries)
-	d.db.QueryRow("SELECT COUNT(*) FROM query_logs WHERE blocked = 1").Scan(&s.BlockedCount)
+	// Resolve time range: accept ISO timestamps or SQLite relative expressions
+	sinceTs, untilTs := resolveTimeRange(since, until)
+
+	// Use parameterized query — safe from injection
+	d.db.QueryRow("SELECT COUNT(*) FROM query_logs WHERE timestamp >= ? AND timestamp <= ?", sinceTs, untilTs).Scan(&s.TotalQueries)
+	d.db.QueryRow("SELECT COUNT(*) FROM query_logs WHERE blocked = 1 AND timestamp >= ? AND timestamp <= ?", sinceTs, untilTs).Scan(&s.BlockedCount)
 
 	if s.TotalQueries > 0 {
 		s.BlockedPct = float64(s.BlockedCount) / float64(s.TotalQueries) * 100
@@ -108,9 +112,9 @@ func (d *Database) GetStats() Stats {
 
 	rows, err := d.db.Query(`
 		SELECT domain, COUNT(*) as cnt FROM query_logs
-		WHERE timestamp > datetime('now', '-24 hours')
+		WHERE timestamp >= ? AND timestamp <= ?
 		GROUP BY domain ORDER BY cnt DESC LIMIT 10
-	`)
+	`, sinceTs, untilTs)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -124,9 +128,9 @@ func (d *Database) GetStats() Stats {
 		SELECT q.client_ip, COALESCE(c.hostname, q.client_ip), COUNT(*) as cnt
 		FROM query_logs q
 		LEFT JOIN client_names c ON q.client_ip = c.client_ip
-		WHERE q.timestamp > datetime('now', '-24 hours')
+		WHERE q.timestamp >= ? AND q.timestamp <= ?
 		GROUP BY q.client_ip ORDER BY cnt DESC LIMIT 10
-	`)
+	`, sinceTs, untilTs)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -141,9 +145,9 @@ func (d *Database) GetStats() Stats {
 			COUNT(*) as total,
 			SUM(CASE WHEN blocked THEN 1 ELSE 0 END) as blocked
 		FROM query_logs
-		WHERE timestamp > datetime('now', '-24 hours')
+		WHERE timestamp >= ? AND timestamp <= ?
 		GROUP BY hour ORDER BY hour
-	`)
+	`, sinceTs, untilTs)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {
@@ -157,9 +161,9 @@ func (d *Database) GetStats() Stats {
 		SELECT q.client_ip, COALESCE(c.hostname, q.client_ip), COUNT(*) as cnt
 		FROM query_logs q
 		LEFT JOIN client_names c ON q.client_ip = c.client_ip
-		WHERE q.blocked = 1 AND q.timestamp > datetime('now', '-24 hours')
+		WHERE q.blocked = 1 AND q.timestamp >= ? AND q.timestamp <= ?
 		GROUP BY q.client_ip ORDER BY cnt DESC LIMIT 10
-	`)
+	`, sinceTs, untilTs)
 	if err == nil {
 		defer rows4.Close()
 		for rows4.Next() {
@@ -170,6 +174,19 @@ func (d *Database) GetStats() Stats {
 	}
 
 	return s
+}
+
+// resolveTimeRange converts since/until params into actual ISO timestamps.
+// The frontend always sends ISO 8601 timestamps (from toISOString()).
+// Only the defaults (empty string) need to be resolved to real timestamps.
+func resolveTimeRange(since, until string) (string, string) {
+	if since == "" {
+		since = time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	}
+	if until == "" {
+		until = time.Now().UTC().Format(time.RFC3339)
+	}
+	return since, until
 }
 
 func (d *Database) cleanup() {

@@ -1,62 +1,71 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import type { WSMessage, QueryLogEntry, DashboardData } from '../types'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import type { DashboardData, QueryLogEntry } from '../types'
 
-const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
+export function useDashboard() {
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/stats')
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        const json = await res.json()
+        if (!cancelled) {
+          setData(json)
+          setError(false)
+        }
+      } catch {
+        if (!cancelled) setError(true)
+      }
+    }
+    fetchStats()
+    const interval = setInterval(fetchStats, 5000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  return { data, error }
+}
 
 export function useWebSocket() {
   const [queries, setQueries] = useState<QueryLogEntry[]>([])
   const wsRef = useRef<WebSocket | null>(null)
-  const maxLogs = 100
+  const reconnectTimer = useRef<number>(0)
+  const mountedRef = useRef(true)
 
-  useEffect(() => {
-    function connect() {
-      const ws = new WebSocket(WS_URL)
-      wsRef.current = ws
+  const connect = useCallback(() => {
+    if (!mountedRef.current || wsRef.current?.readyState === WebSocket.OPEN) return
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(protocol + '//' + window.location.host + '/ws')
 
-      ws.onmessage = (event) => {
-        try {
-          const msg: WSMessage = JSON.parse(event.data)
-          if (msg.type === 'query') {
-            const entry = msg.data as QueryLogEntry
-            setQueries((prev) => [entry, ...prev].slice(0, maxLogs))
-          }
-        } catch {}
-      }
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.type === 'query') {
+          setQueries((prev) => [msg.data, ...prev].slice(0, 200))
+        }
+      } catch {}
+    }
 
-      ws.onclose = () => {
-        setTimeout(connect, 3000)
-      }
-
-      ws.onerror = () => {
-        ws.close()
+    ws.onclose = () => {
+      if (mountedRef.current) {
+        reconnectTimer.current = window.setTimeout(connect, 3000)
       }
     }
 
+    wsRef.current = ws
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
     connect()
     return () => {
+      mountedRef.current = false
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       wsRef.current?.close()
     }
-  }, [])
+  }, [connect])
 
   return { queries }
-}
-
-export function useDashboard() {
-  const [data, setData] = useState<DashboardData | null>(null)
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await fetch('/api/stats')
-      const json = await res.json()
-      setData(json)
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    fetchStats()
-    const interval = setInterval(fetchStats, 5000)
-    return () => clearInterval(interval)
-  }, [fetchStats])
-
-  return { data, refetch: fetchStats }
 }

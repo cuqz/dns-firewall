@@ -53,7 +53,7 @@ Track total queries, blocked percentage, top domains, and top clients over 24 ho
 
 ### Per-Client Block Stats
 
-See which devices trigger the most blocked domains. Identify infected or ad-heavy devices on your network at a glance.
+See which devices trigger the most blocked domains — with real device hostnames and IPs. Identify infected or ad-heavy devices on your network at a glance.
 
 ### Automatic Blocklist Updates
 
@@ -82,7 +82,7 @@ docker compose up -d
 
 | Provider | Region | DNS | Dashboard | Status |
 |---|---|---|---|---|
-| **AWS EC2** | Cape Town (af‑south‑1) | `13.244.75.166` | `:8080` | Live |
+| **AWS EC2** | Cape Town (af‑south‑1) | `15.240.37.146` | `http://15.240.37.146:8080` | Live |
 | **Fly.io** | Amsterdam | — | `https://dns-firewall.fly.dev` | Live |
 | **Oracle Cloud** | Johannesburg | — | — | Pending capacity |
 | **Local** | Your machine | `:8053` | `:8080` | Dev |
@@ -91,13 +91,13 @@ docker compose up -d
 
 ## Router Setup
 
-Set your router's primary DNS to the server IP. Secondary to `1.1.1.1`.
+Set your router's primary DNS to `15.240.37.146`. Secondary to `1.1.1.1`.
 
 ### ASUS
 
 ```
 Advanced Settings → WAN → Internet Connection
-WAN DNS Setting → DNS Server1: <server-ip>
+WAN DNS Setting → DNS Server1: 15.240.37.146
 WAN DNS Setting → DNS Server2: 1.1.1.1
 Apply
 ```

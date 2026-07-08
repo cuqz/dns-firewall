@@ -1,7 +1,7 @@
 import { ShieldOff } from 'lucide-react'
 
 interface TopBlockedClientsProps {
-  clients: { client_ip: string; count: number }[]
+  clients: { client_ip: string; hostname?: string; count: number }[]
 }
 
 export function TopBlockedClients({ clients }: TopBlockedClientsProps) {
@@ -26,7 +26,13 @@ export function TopBlockedClients({ clients }: TopBlockedClientsProps) {
                   {c.client_ip.split('.').pop()}
                 </span>
               </span>
-              <span className="text-xs text-text-primary font-mono flex-1 truncate">{c.client_ip}</span>
+              <span className="text-xs text-text-primary flex-1 truncate">
+                {c.hostname && c.hostname !== c.client_ip ? (
+                  <>{c.hostname} <span className="text-text-muted">({c.client_ip})</span></>
+                ) : (
+                  <span className="font-mono">{c.client_ip}</span>
+                )}
+              </span>
               <span className="text-[10px] text-danger font-medium w-8 text-right">{c.count}</span>
               <div className="w-16 h-1.5 bg-surface-lighter rounded-full overflow-hidden">
                 <div

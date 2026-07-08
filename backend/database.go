@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"net"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -46,8 +47,40 @@ func (d *Database) migrate() error {
 		CREATE INDEX IF NOT EXISTS idx_blocked ON query_logs(blocked);
 		CREATE INDEX IF NOT EXISTS idx_domain ON query_logs(domain);
 		CREATE INDEX IF NOT EXISTS idx_client_ip ON query_logs(client_ip);
+
+		CREATE TABLE IF NOT EXISTS client_names (
+			client_ip TEXT PRIMARY KEY,
+			hostname TEXT NOT NULL DEFAULT ''
+		);
 	`)
 	return err
+}
+
+func (d *Database) resolveHostname(ip string) string {
+	// Check cache first
+	var hostname string
+	err := d.db.QueryRow("SELECT hostname FROM client_names WHERE client_ip = ?", ip).Scan(&hostname)
+	if err == nil && hostname != "" {
+		return hostname
+	}
+
+	// Try reverse DNS lookup
+	names, err := net.LookupAddr(ip)
+	if err == nil && len(names) > 0 {
+		hostname = names[0]
+		// Strip trailing dot
+		if len(hostname) > 0 && hostname[len(hostname)-1] == '.' {
+			hostname = hostname[:len(hostname)-1]
+		}
+	}
+
+	if hostname == "" {
+		hostname = ip
+	}
+
+	// Cache it
+	d.db.Exec("INSERT OR REPLACE INTO client_names (client_ip, hostname) VALUES (?, ?)", ip, hostname)
+	return hostname
 }
 
 func (d *Database) LogQuery(clientIP, domain, queryType string, blocked bool, durationMs int64) {
@@ -58,6 +91,9 @@ func (d *Database) LogQuery(clientIP, domain, queryType string, blocked bool, du
 	if err != nil {
 		log.Printf("Failed to log query: %v", err)
 	}
+
+	// Async hostname resolution
+	go d.resolveHostname(clientIP)
 }
 
 func (d *Database) GetStats() Stats {
@@ -85,15 +121,17 @@ func (d *Database) GetStats() Stats {
 	}
 
 	rows2, err := d.db.Query(`
-		SELECT client_ip, COUNT(*) as cnt FROM query_logs
-		WHERE timestamp > datetime('now', '-24 hours')
-		GROUP BY client_ip ORDER BY cnt DESC LIMIT 10
+		SELECT q.client_ip, COALESCE(c.hostname, q.client_ip), COUNT(*) as cnt
+		FROM query_logs q
+		LEFT JOIN client_names c ON q.client_ip = c.client_ip
+		WHERE q.timestamp > datetime('now', '-24 hours')
+		GROUP BY q.client_ip ORDER BY cnt DESC LIMIT 10
 	`)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
 			var cc ClientCount
-			rows2.Scan(&cc.ClientIP, &cc.Count)
+			rows2.Scan(&cc.ClientIP, &cc.Hostname, &cc.Count)
 			s.TopClients = append(s.TopClients, cc)
 		}
 	}
@@ -116,15 +154,17 @@ func (d *Database) GetStats() Stats {
 	}
 
 	rows4, err := d.db.Query(`
-		SELECT client_ip, COUNT(*) as cnt FROM query_logs
-		WHERE blocked = 1 AND timestamp > datetime('now', '-24 hours')
-		GROUP BY client_ip ORDER BY cnt DESC LIMIT 10
+		SELECT q.client_ip, COALESCE(c.hostname, q.client_ip), COUNT(*) as cnt
+		FROM query_logs q
+		LEFT JOIN client_names c ON q.client_ip = c.client_ip
+		WHERE q.blocked = 1 AND q.timestamp > datetime('now', '-24 hours')
+		GROUP BY q.client_ip ORDER BY cnt DESC LIMIT 10
 	`)
 	if err == nil {
 		defer rows4.Close()
 		for rows4.Next() {
 			var cc ClientCount
-			rows4.Scan(&cc.ClientIP, &cc.Count)
+			rows4.Scan(&cc.ClientIP, &cc.Hostname, &cc.Count)
 			s.TopBlockedClients = append(s.TopBlockedClients, cc)
 		}
 	}

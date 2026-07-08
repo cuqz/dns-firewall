@@ -29,6 +29,7 @@ type DomainCount struct {
 
 type ClientCount struct {
 	ClientIP string `json:"client_ip"`
+	Hostname string `json:"hostname"`
 	Count    int64  `json:"count"`
 }
 

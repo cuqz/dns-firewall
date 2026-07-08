@@ -25,15 +25,14 @@ function Dd({ v, set, opts }: { v: number; set: (n: number) => void; opts: { v: 
 }
 
 export default function App() {
-  const { data, error } = useDashboard()
-  const { queries } = useWebSocket()
-  const stats = data?.stats
-  const [tab, setTab] = useState<'overview' | 'log'>('overview')
-
   const now = new Date()
   const today = now.getDate()
   const thisMonth = now.getMonth()
   const thisYear = now.getFullYear()
+
+  const [fd, setFd] = useState(today)
+  const [fm, setFm] = useState(thisMonth)
+  const [fy, setFy] = useState(thisYear)
 
   // Restrict to: min = 7 days ago or install date, max = today
   const minDate = new Date(now)
@@ -43,9 +42,20 @@ export default function App() {
   const minYear = minDate.getFullYear()
   const minTs = minDate.getTime()
 
-  const [fd, setFd] = useState(today)
-  const [fm, setFm] = useState(thisMonth)
-  const [fy, setFy] = useState(thisYear)
+  // Compute ISO timestamps from selected date
+  const selectedDate = useMemo(() => {
+    const d = new Date(fy, fm, fd)
+    const start = new Date(d)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(d)
+    end.setHours(23, 59, 59, 999)
+    return { since: start.toISOString(), until: end.toISOString() }
+  }, [fd, fm, fy])
+
+  const { data, error } = useDashboard(selectedDate.since, selectedDate.until)
+  const { queries } = useWebSocket()
+  const stats = data?.stats
+  const [tab, setTab] = useState<'overview' | 'log'>('overview')
 
   // Clamp date — never future, never before min
   const clamp = (d: number, m: number, y: number) => {
@@ -137,6 +147,8 @@ export default function App() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[#888]">Query Volume</h3>
               <div className="flex items-center gap-2">
+                <button onClick={() => { setFd(today); setFm(thisMonth); setFy(thisYear) }}
+                  className="text-xs text-[#4a9eff] hover:text-[#6bb5ff] transition-colors px-2 py-1 rounded border border-[rgba(74,158,255,0.2)] hover:border-[rgba(74,158,255,0.4)]">Today</button>
                 <Dd v={fd} set={handleDay} opts={days.map(d => ({ v: d, l: String(d).padStart(2, '0') }))} />
                 <Dd v={fm} set={handleMonth} opts={months.map((m, i) => ({ v: i, l: m }))} />
                 <Dd v={fy} set={handleYear} opts={years.map(y => ({ v: y, l: String(y) }))} />

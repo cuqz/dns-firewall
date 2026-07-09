@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -96,7 +97,7 @@ func (d *Database) LogQuery(clientIP, domain, queryType string, blocked bool, du
 	go d.resolveHostname(clientIP)
 }
 
-func (d *Database) GetStats(since, until string) Stats {
+func (d *Database) GetStats(since, until, groupBy string) Stats {
 	var s Stats
 
 	// Resolve time range: accept ISO timestamps or SQLite relative expressions
@@ -140,21 +141,36 @@ func (d *Database) GetStats(since, until string) Stats {
 		}
 	}
 
-	rows3, err := d.db.Query(`
-		SELECT strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour,
-			COUNT(*) as total,
-			SUM(CASE WHEN blocked THEN 1 ELSE 0 END) as blocked
+	// Time bucket query with dynamic granularity
+	var timeFmt string
+	switch groupBy {
+	case "month":
+		timeFmt = "%Y-%m-01T00:00:00Z"
+	case "day":
+		timeFmt = "%Y-%m-%dT00:00:00Z"
+	default: // hour
+		timeFmt = "%Y-%m-%dT%H:00:00Z"
+	}
+
+	// Use fmt.Sprintf only for the time format string (not user input)
+	timeQuery := fmt.Sprintf(`SELECT strftime('%s', timestamp) as period,
+		COUNT(*) as total,
+		SUM(CASE WHEN blocked THEN 1 ELSE 0 END) as blocked,
+		AVG(duration_ms) as avg_dur
 		FROM query_logs
 		WHERE timestamp >= ? AND timestamp <= ?
-		GROUP BY hour ORDER BY hour
-	`, sinceTs, untilTs)
+		GROUP BY period ORDER BY period`, timeFmt)
+
+	rows3, err := d.db.Query(timeQuery, sinceTs, untilTs)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {
 			var tb TimeBucket
-			rows3.Scan(&tb.Hour, &tb.Total, &tb.Blocked)
+			rows3.Scan(&tb.Hour, &tb.Total, &tb.Blocked, &tb.AvgDuration)
 			s.QueriesLast24 = append(s.QueriesLast24, tb)
 		}
+	} else {
+		log.Printf("Time bucket query error: %v", err)
 	}
 
 	rows4, err := d.db.Query(`
@@ -170,6 +186,36 @@ func (d *Database) GetStats(since, until string) Stats {
 			var cc ClientCount
 			rows4.Scan(&cc.ClientIP, &cc.Hostname, &cc.Count)
 			s.TopBlockedClients = append(s.TopBlockedClients, cc)
+		}
+	}
+
+	// Top blocked domains
+	rows5, err := d.db.Query(`
+		SELECT domain, COUNT(*) as cnt FROM query_logs
+		WHERE blocked = 1 AND timestamp >= ? AND timestamp <= ?
+		GROUP BY domain ORDER BY cnt DESC LIMIT 10
+	`, sinceTs, untilTs)
+	if err == nil {
+		defer rows5.Close()
+		for rows5.Next() {
+			var dc DomainCount
+			rows5.Scan(&dc.Domain, &dc.Count)
+			s.TopBlockedDomains = append(s.TopBlockedDomains, dc)
+		}
+	}
+
+	// Query type distribution
+	rows6, err := d.db.Query(`
+		SELECT query_type, COUNT(*) as cnt FROM query_logs
+		WHERE timestamp >= ? AND timestamp <= ?
+		GROUP BY query_type ORDER BY cnt DESC
+	`, sinceTs, untilTs)
+	if err == nil {
+		defer rows6.Close()
+		for rows6.Next() {
+			var tc TypeCount
+			rows6.Scan(&tc.Type, &tc.Count)
+			s.QueryTypes = append(s.QueryTypes, tc)
 		}
 	}
 
@@ -192,7 +238,7 @@ func resolveTimeRange(since, until string) (string, string) {
 func (d *Database) cleanup() {
 	ticker := time.NewTicker(1 * time.Hour)
 	for range ticker.C {
-		d.db.Exec("DELETE FROM query_logs WHERE timestamp < datetime('now', '-7 days')")
+		d.db.Exec("DELETE FROM query_logs WHERE timestamp < datetime('now', '-30 days')")
 		_, err := d.db.Exec("VACUUM")
 		if err != nil {
 			log.Printf("Vacuum error: %v", err)

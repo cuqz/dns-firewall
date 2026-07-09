@@ -13,9 +13,11 @@ export interface Stats {
   blocked_count: number
   blocked_pct: number
   top_domains: { domain: string; count: number }[]
+  top_blocked_domains: { domain: string; count: number }[]
   top_clients: { client_ip: string; hostname?: string; count: number }[]
   top_blocked_clients: { client_ip: string; hostname?: string; count: number }[]
-  queries_last_24h: { hour: string; total: number; blocked: number }[]
+  query_types: { type: string; count: number }[]
+  queries_last_24h: { hour: string; total: number; blocked: number; avg_duration_ms: number }[]
 }
 
 export interface DashboardData {

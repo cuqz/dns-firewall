@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/netip"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -124,6 +125,26 @@ func (f *Firewall) Domains() []string {
 	result := make([]string, len(f.domains))
 	copy(result, f.domains)
 	return result
+}
+
+func (f *Firewall) SearchDomains(q string, limit int) []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if q == "" {
+		return nil
+	}
+	q = strings.ToLower(q)
+	var results []string
+	for _, d := range f.domains {
+		if strings.Contains(d, q) {
+			results = append(results, d)
+			if len(results) >= limit {
+				break
+			}
+		}
+	}
+	sort.Strings(results)
+	return results
 }
 
 func (f *Firewall) Stat() (total int, updated string) {

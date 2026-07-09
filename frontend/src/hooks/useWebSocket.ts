@@ -1,31 +1,44 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { DashboardData, QueryLogEntry } from '../types'
 
-export function useDashboard() {
+export function useDashboard(since?: string, until?: string, groupBy?: string) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const fetchStats = async () => {
       try {
-        const res = await fetch('/api/stats')
+        let url = '/api/stats'
+        const params: string[] = []
+        if (since && until) {
+          params.push('since=' + encodeURIComponent(since), 'until=' + encodeURIComponent(until))
+        }
+        if (groupBy) params.push('group_by=' + encodeURIComponent(groupBy))
+        if (params.length) url += '?' + params.join('&')
+        const res = await fetch(url)
         if (!res.ok) throw new Error('HTTP ' + res.status)
         const json = await res.json()
         if (!cancelled) {
           setData(json)
           setError(false)
+          setLastRefresh(new Date())
         }
       } catch {
         if (!cancelled) setError(true)
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
+    setLoading(true)
     fetchStats()
     const interval = setInterval(fetchStats, 5000)
     return () => { cancelled = true; clearInterval(interval) }
-  }, [])
+  }, [since, until, groupBy])
 
-  return { data, error }
+  return { data, error, loading, lastRefresh }
 }
 
 export function useWebSocket() {

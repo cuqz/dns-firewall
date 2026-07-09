@@ -95,8 +95,12 @@ func (a *API) handleStats(w http.ResponseWriter, r *http.Request) {
 	// Parse optional date range from query params
 	since := r.URL.Query().Get("since")
 	until := r.URL.Query().Get("until")
+	groupBy := r.URL.Query().Get("group_by")
+	if groupBy == "" {
+		groupBy = "hour"
+	}
 
-	stats := a.db.GetStats(since, until)
+	stats := a.db.GetStats(since, until, groupBy)
 	total, updated := a.firewall.Stat()
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"stats":            stats,
@@ -107,6 +111,18 @@ func (a *API) handleStats(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleBlocklist(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	q := r.URL.Query().Get("q")
+	if q != "" {
+		results := a.firewall.SearchDomains(q, 50)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"query":   q,
+			"total":   len(results),
+			"results": results,
+		})
+		return
+	}
+
 	domains := a.firewall.Domains()
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"total":   len(domains),

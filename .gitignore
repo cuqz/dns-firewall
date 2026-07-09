@@ -36,3 +36,16 @@ Thumbs.db
 # Deploy artifacts
 .env
 *.zip
+
+# Personal & sensitive
+CLAUDE.md
+*.pem
+*.key
+oracle-retry-vm.py
+oracle-retry-vm-log.txt
+retry-log.txt
+aws-*.py
+
+# Binary (built locally)
+backend/dns-firewall
+

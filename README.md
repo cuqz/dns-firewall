@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cuqz/dns-firewall/master/assets/logo.svg">
-    <img alt="DeepDNS" src="https://raw.githubusercontent.com/cuqz/dns-firewall/master/assets/logo.svg" width="120">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cuqz/DeepDNS/master/assets/logo.svg">
+    <img alt="DeepDNS" src="https://raw.githubusercontent.com/cuqz/DeepDNS/master/assets/logo.svg" width="120">
   </picture>
 </p>
 
@@ -15,11 +15,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cuqz/dns-firewall/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&labelColor=1a1a2e" alt="License"></a>
+  <a href="https://github.com/cuqz/DeepDNS/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&labelColor=1a1a2e" alt="License"></a>
   <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.23-00ADD8?style=flat-square&labelColor=1a1a2e&logo=go" alt="Go"></a>
   <a href="https://react.dev"><img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&labelColor=1a1a2e&logo=react" alt="React"></a>
-  <a href="https://github.com/cuqz/dns-firewall/releases"><img src="https://img.shields.io/github/v/release/cuqz/dns-firewall?style=flat-square&labelColor=1a1a2e" alt="Release"></a>
-  <a href="https://github.com/cuqz/dns-firewall/stargazers"><img src="https://img.shields.io/github/stars/cuqz/dns-firewall?style=flat-square&labelColor=1a1a2e" alt="Stars"></a>
+  <a href="https://github.com/cuqz/DeepDNS/releases"><img src="https://img.shields.io/github/v/release/cuqz/DeepDNS?style=flat-square&labelColor=1a1a2e" alt="Release"></a>
+  <a href="https://github.com/cuqz/DeepDNS/stargazers"><img src="https://img.shields.io/github/stars/cuqz/DeepDNS?style=flat-square&labelColor=1a1a2e" alt="Stars"></a>
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@
 ## 📸 Dashboard
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/cuqz/dns-firewall/master/assets/mockup-dashboard.png" alt="DeepDNS Dashboard" width="800">
+  <img src="https://raw.githubusercontent.com/cuqz/DeepDNS/master/assets/mockup-dashboard.png" alt="DeepDNS Dashboard" width="800">
   <br>
   <em>Real-time query analytics, live log viewer, and blocklist management</em>
 </p>
@@ -47,7 +47,7 @@
 ### Run locally (no Docker, no install)
 
 ```bash
-git clone https://github.com/cuqz/dns-firewall.git
+git clone https://github.com/cuqz/DeepDNS.git
 cd dns-firewall/backend
 go run . --dns-addr :8053 --api-addr :8080
 ```
@@ -57,7 +57,7 @@ Dashboard at **`http://localhost:8080`**. Set your device DNS to `localhost:8053
 ### Docker
 
 ```bash
-git clone https://github.com/cuqz/dns-firewall.git
+git clone https://github.com/cuqz/DeepDNS.git
 cd dns-firewall
 docker compose up -d
 ```
@@ -184,7 +184,7 @@ The setting is usually under **Internet/WAN → DNS Server** in your router's ad
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
 sudo apt install -y nodejs golang-go
 
-git clone https://github.com/cuqz/dns-firewall.git
+git clone https://github.com/cuqz/DeepDNS.git
 cd dns-firewall/backend
 go build -o dns-firewall .
 
@@ -253,14 +253,14 @@ Frontend dev server at `http://localhost:5180` — proxies `/api` and `/ws` to t
 
 ## 📄 License
 
-**MIT License** — free to use, modify, and distribute. See [LICENSE](https://github.com/cuqz/dns-firewall/blob/main/LICENSE).
+**MIT License** — free to use, modify, and distribute. See [LICENSE](https://github.com/cuqz/DeepDNS/blob/main/LICENSE).
 
 ---
 
 <p align="center">
-  <a href="https://github.com/cuqz/dns-firewall"><img src="https://img.shields.io/badge/⭐ Star%20on%20GitHub-1a1a2e?style=for-the-badge" alt="Star on GitHub"></a>
-  <a href="https://github.com/cuqz/dns-firewall/issues"><img src="https://img.shields.io/badge/🐛 Report%20Issue-1a1a2e?style=for-the-badge" alt="Report Issue"></a>
-  <a href="https://github.com/cuqz/dns-firewall/discussions"><img src="https://img.shields.io/badge/💬 Start%20Discussion-1a1a2e?style=for-the-badge" alt="Start Discussion"></a>
+  <a href="https://github.com/cuqz/DeepDNS"><img src="https://img.shields.io/badge/⭐ Star%20on%20GitHub-1a1a2e?style=for-the-badge" alt="Star on GitHub"></a>
+  <a href="https://github.com/cuqz/DeepDNS/issues"><img src="https://img.shields.io/badge/🐛 Report%20Issue-1a1a2e?style=for-the-badge" alt="Report Issue"></a>
+  <a href="https://github.com/cuqz/DeepDNS/discussions"><img src="https://img.shields.io/badge/💬 Start%20Discussion-1a1a2e?style=for-the-badge" alt="Start Discussion"></a>
 </p>
 
 <p align="center">

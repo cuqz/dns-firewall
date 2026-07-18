@@ -4,7 +4,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,6 +18,8 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
+
+var hostnameSem = make(chan struct{}, 50)
 
 func newWebSocketUpgrader() websocket.Upgrader {
 	return upgrader
@@ -32,8 +36,8 @@ func (c *WSClient) writePump(conn *websocket.Conn) {
 
 func (c *WSClient) readPump(conn *websocket.Conn, cm *ClientManager) {
 	defer func() {
-		cm.Unregister(c)
 		conn.Close()
+		cm.Unregister(c)
 	}()
 	for {
 		_, _, err := conn.ReadMessage()
@@ -44,7 +48,11 @@ func (c *WSClient) readPump(conn *websocket.Conn, cm *ClientManager) {
 }
 
 func main() {
-	exeDir := filepath.Dir(os.Args[0])
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatalf("Failed to get executable path: %v", err)
+	}
+	exeDir := filepath.Dir(exe)
 	dbPath := filepath.Join(exeDir, "dns-firewall.db")
 	blocklistPath := filepath.Join(exeDir, "blocklists")
 	frontendDir := filepath.Join(exeDir, "..", "frontend", "dist")
@@ -134,6 +142,15 @@ func main() {
 		}
 	}
 
+	// Load custom blocks from DB
+	customDomains, err := db.LoadCustomBlocks()
+	if err == nil {
+		for _, d := range customDomains {
+			firewall.AddCustom(d)
+		}
+		log.Printf("Loaded %d custom blocks", len(customDomains))
+	}
+
 	clients := NewClientManager()
 
 	dnsServer := NewDNSServer(config.Upstream, firewall, db, clients)
@@ -146,12 +163,21 @@ func main() {
 	fs := http.FileServer(http.Dir(frontendDir))
 	mux.Handle("/", fs)
 
+	apiServer := &http.Server{Addr: config.APIAddr, Handler: mux}
+
 	go func() {
 		log.Printf("API server listening on %s", config.APIAddr)
-		if err := http.ListenAndServe(config.APIAddr, mux); err != nil {
+		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("API server error: %v", err)
 		}
 	}()
 
-	dnsServer.Start(config.DNSAddr)
+	go dnsServer.Start(config.DNSAddr)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+	log.Println("Shutting down...")
+	db.Close()
+	os.Exit(0)
 }

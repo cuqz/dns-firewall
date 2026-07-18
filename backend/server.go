@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net"
 	"time"
 
 	"github.com/miekg/dns"
@@ -75,7 +74,6 @@ func (s *DNSServer) handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	resp.Id = r.Id
 	resp.MsgHdr.Response = true
 
 	duration := time.Since(start).Milliseconds()
@@ -127,24 +125,4 @@ func (s *DNSServer) Start(addr string) error {
 	}()
 
 	select {}
-}
-
-func (s *DNSServer) lookup(domain string) ([]net.IP, error) {
-	m := new(dns.Msg)
-	m.SetQuestion(dns.Fqdn(domain), dns.TypeA)
-	m.RecursionDesired = true
-
-	c := new(dns.Client)
-	resp, _, err := c.Exchange(m, s.upstream)
-	if err != nil {
-		return nil, err
-	}
-
-	var ips []net.IP
-	for _, ans := range resp.Answer {
-		if a, ok := ans.(*dns.A); ok {
-			ips = append(ips, a.A)
-		}
-	}
-	return ips, nil
 }

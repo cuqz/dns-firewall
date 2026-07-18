@@ -30,7 +30,7 @@ func NewFirewall() *Firewall {
 func (f *Firewall) loadDefaults() {
 	builtin := []string{
 		"doubleclick.net", "googlesyndication.com", "googleadservices.com",
-		"google-analytics.com", "googletagmanager.com", "facebook.com/tr",
+		"google-analytics.com", "googletagmanager.com",
 		"adsrvr.org", "adzerk.net", "analytics.twitter.com",
 		"scorecardresearch.com", "outbrain.com", "taboola.com",
 		"criteo.com", "criteo.net", "adnxs.com",
@@ -71,8 +71,8 @@ func (f *Firewall) LoadBlocklist(path string) error {
 	}
 	defer file.Close()
 
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	tmpBlocklist := make(map[string]bool)
+	var tmpDomains []string
 
 	scanner := bufio.NewScanner(file)
 	count := 0
@@ -82,14 +82,49 @@ func (f *Firewall) LoadBlocklist(path string) error {
 			continue
 		}
 		domain := strings.ToLower(line)
-		f.blocklist[domain] = true
-		f.domains = append(f.domains, domain)
+		tmpBlocklist[domain] = true
+		tmpDomains = append(tmpDomains, domain)
 		count++
 	}
 
+	f.mu.Lock()
+	f.blocklist = tmpBlocklist
+	f.domains = tmpDomains
 	f.updatedAt = time.Now()
+	f.mu.Unlock()
+
 	log.Printf("Loaded %d domains from blocklist", count)
 	return scanner.Err()
+}
+
+func (f *Firewall) AllBlocks() []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	result := make([]string, len(f.domains))
+	copy(result, f.domains)
+	return result
+}
+
+func (f *Firewall) AddCustom(domain string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.blocklist[strings.ToLower(domain)] = true
+	f.domains = append(f.domains, domain)
+}
+
+func (f *Firewall) RemoveCustom(domain string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.blocklist, strings.ToLower(domain))
+	// rebuild domains slice without the removed one
+	d := strings.ToLower(domain)
+	var kept []string
+	for _, v := range f.domains {
+		if strings.ToLower(v) != d {
+			kept = append(kept, v)
+		}
+	}
+	f.domains = kept
 }
 
 func (f *Firewall) IsBlocked(domain string) bool {
@@ -138,12 +173,12 @@ func (f *Firewall) SearchDomains(q string, limit int) []string {
 	for _, d := range f.domains {
 		if strings.Contains(d, q) {
 			results = append(results, d)
-			if len(results) >= limit {
-				break
-			}
 		}
 	}
 	sort.Strings(results)
+	if len(results) > limit {
+		results = results[:limit]
+	}
 	return results
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -53,23 +54,51 @@ func (d *Database) migrate() error {
 			client_ip TEXT PRIMARY KEY,
 			hostname TEXT NOT NULL DEFAULT ''
 		);
+
+		CREATE TABLE IF NOT EXISTS custom_blocks (
+			domain TEXT PRIMARY KEY,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	return err
 }
 
+func (d *Database) LoadCustomBlocks() ([]string, error) {
+	rows, err := d.db.Query("SELECT domain FROM custom_blocks ORDER BY domain")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var domains []string
+	for rows.Next() {
+		var dm string
+		rows.Scan(&dm)
+		domains = append(domains, dm)
+	}
+	return domains, nil
+}
+
+func (d *Database) AddCustomBlock(domain string) error {
+	_, err := d.db.Exec("INSERT OR IGNORE INTO custom_blocks (domain) VALUES (?)", strings.ToLower(domain))
+	return err
+}
+
+func (d *Database) RemoveCustomBlock(domain string) error {
+	_, err := d.db.Exec("DELETE FROM custom_blocks WHERE domain = ?", strings.ToLower(domain))
+	return err
+}
+
 func (d *Database) resolveHostname(ip string) string {
-	// Check cache first
 	var hostname string
 	err := d.db.QueryRow("SELECT hostname FROM client_names WHERE client_ip = ?", ip).Scan(&hostname)
 	if err == nil && hostname != "" {
 		return hostname
 	}
 
-	// Try reverse DNS lookup
 	names, err := net.LookupAddr(ip)
 	if err == nil && len(names) > 0 {
 		hostname = names[0]
-		// Strip trailing dot
+		// trailing dot from PTR records
 		if len(hostname) > 0 && hostname[len(hostname)-1] == '.' {
 			hostname = hostname[:len(hostname)-1]
 		}
@@ -79,7 +108,6 @@ func (d *Database) resolveHostname(ip string) string {
 		hostname = ip
 	}
 
-	// Cache it
 	d.db.Exec("INSERT OR REPLACE INTO client_names (client_ip, hostname) VALUES (?, ?)", ip, hostname)
 	return hostname
 }
@@ -93,8 +121,15 @@ func (d *Database) LogQuery(clientIP, domain, queryType string, blocked bool, du
 		log.Printf("Failed to log query: %v", err)
 	}
 
-	// Async hostname resolution
-	go d.resolveHostname(clientIP)
+	select {
+	case hostnameSem <- struct{}{}:
+		go func() {
+			defer func() { <-hostnameSem }()
+			d.resolveHostname(clientIP)
+		}()
+	default:
+		// skip resolution under load
+	}
 }
 
 func (d *Database) GetStats(since, until, groupBy string) Stats {
@@ -103,7 +138,6 @@ func (d *Database) GetStats(since, until, groupBy string) Stats {
 	// Resolve time range: accept ISO timestamps or SQLite relative expressions
 	sinceTs, untilTs := resolveTimeRange(since, until)
 
-	// Use parameterized query — safe from injection
 	d.db.QueryRow("SELECT COUNT(*) FROM query_logs WHERE timestamp >= ? AND timestamp <= ?", sinceTs, untilTs).Scan(&s.TotalQueries)
 	d.db.QueryRow("SELECT COUNT(*) FROM query_logs WHERE blocked = 1 AND timestamp >= ? AND timestamp <= ?", sinceTs, untilTs).Scan(&s.BlockedCount)
 
@@ -116,11 +150,14 @@ func (d *Database) GetStats(since, until, groupBy string) Stats {
 		WHERE timestamp >= ? AND timestamp <= ?
 		GROUP BY domain ORDER BY cnt DESC LIMIT 10
 	`, sinceTs, untilTs)
-	if err == nil {
+		if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var dc DomainCount
-			rows.Scan(&dc.Domain, &dc.Count)
+			if err := rows.Scan(&dc.Domain, &dc.Count); err != nil {
+				log.Printf("Scan error (top domains): %v", err)
+				continue
+			}
 			s.TopDomains = append(s.TopDomains, dc)
 		}
 	}
@@ -136,27 +173,27 @@ func (d *Database) GetStats(since, until, groupBy string) Stats {
 		defer rows2.Close()
 		for rows2.Next() {
 			var cc ClientCount
-			rows2.Scan(&cc.ClientIP, &cc.Hostname, &cc.Count)
+			if err := rows2.Scan(&cc.ClientIP, &cc.Hostname, &cc.Count); err != nil {
+				log.Printf("Scan error (top clients): %v", err)
+				continue
+			}
 			s.TopClients = append(s.TopClients, cc)
 		}
 	}
 
-	// Time bucket query with dynamic granularity
 	var timeFmt string
 	switch groupBy {
 	case "month":
 		timeFmt = "%Y-%m-01T00:00:00Z"
 	case "day":
 		timeFmt = "%Y-%m-%dT00:00:00Z"
-	default: // hour
+	default:
 		timeFmt = "%Y-%m-%dT%H:00:00Z"
 	}
 
-	// Use fmt.Sprintf only for the time format string (not user input)
 	timeQuery := fmt.Sprintf(`SELECT strftime('%s', timestamp) as period,
 		COUNT(*) as total,
-		SUM(CASE WHEN blocked THEN 1 ELSE 0 END) as blocked,
-		AVG(duration_ms) as avg_dur
+		SUM(CASE WHEN blocked THEN 1 ELSE 0 END) as blocked
 		FROM query_logs
 		WHERE timestamp >= ? AND timestamp <= ?
 		GROUP BY period ORDER BY period`, timeFmt)
@@ -166,7 +203,7 @@ func (d *Database) GetStats(since, until, groupBy string) Stats {
 		defer rows3.Close()
 		for rows3.Next() {
 			var tb TimeBucket
-			rows3.Scan(&tb.Hour, &tb.Total, &tb.Blocked, &tb.AvgDuration)
+			rows3.Scan(&tb.Hour, &tb.Total, &tb.Blocked)
 			s.QueriesLast24 = append(s.QueriesLast24, tb)
 		}
 	} else {
@@ -189,42 +226,10 @@ func (d *Database) GetStats(since, until, groupBy string) Stats {
 		}
 	}
 
-	// Top blocked domains
-	rows5, err := d.db.Query(`
-		SELECT domain, COUNT(*) as cnt FROM query_logs
-		WHERE blocked = 1 AND timestamp >= ? AND timestamp <= ?
-		GROUP BY domain ORDER BY cnt DESC LIMIT 10
-	`, sinceTs, untilTs)
-	if err == nil {
-		defer rows5.Close()
-		for rows5.Next() {
-			var dc DomainCount
-			rows5.Scan(&dc.Domain, &dc.Count)
-			s.TopBlockedDomains = append(s.TopBlockedDomains, dc)
-		}
-	}
-
-	// Query type distribution
-	rows6, err := d.db.Query(`
-		SELECT query_type, COUNT(*) as cnt FROM query_logs
-		WHERE timestamp >= ? AND timestamp <= ?
-		GROUP BY query_type ORDER BY cnt DESC
-	`, sinceTs, untilTs)
-	if err == nil {
-		defer rows6.Close()
-		for rows6.Next() {
-			var tc TypeCount
-			rows6.Scan(&tc.Type, &tc.Count)
-			s.QueryTypes = append(s.QueryTypes, tc)
-		}
-	}
-
 	return s
 }
 
-// resolveTimeRange converts since/until params into actual ISO timestamps.
-// The frontend always sends ISO 8601 timestamps (from toISOString()).
-// Only the defaults (empty string) need to be resolved to real timestamps.
+// frontend sends ISO 8601, defaults get filled in
 func resolveTimeRange(since, until string) (string, string) {
 	if since == "" {
 		since = time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)

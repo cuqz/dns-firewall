@@ -13,7 +13,9 @@ type ClientManager struct {
 }
 
 type WSClient struct {
-	send chan []byte
+	send   chan []byte
+	closed bool
+	mu     sync.Mutex
 }
 
 func NewClientManager() *ClientManager {
@@ -33,7 +35,16 @@ func (cm *ClientManager) Unregister(client *WSClient) {
 	defer cm.mu.Unlock()
 	if _, ok := cm.clients[client]; ok {
 		delete(cm.clients, client)
-		close(client.send)
+		client.closeSafe()
+	}
+}
+
+func (c *WSClient) closeSafe() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.closed {
+		close(c.send)
+		c.closed = true
 	}
 }
 
@@ -43,13 +54,13 @@ func (cm *ClientManager) Broadcast(msg WSMessage) {
 		return
 	}
 
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
 	for client := range cm.clients {
 		select {
 		case client.send <- data:
 		default:
-			close(client.send)
+			client.closeSafe()
 			delete(cm.clients, client)
 		}
 	}
@@ -84,6 +95,7 @@ func NewAPI(firewall *Firewall, db *Database, clients *ClientManager, server *DN
 func (a *API) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stats", a.handleStats)
 	mux.HandleFunc("/api/blocklist", a.handleBlocklist)
+	mux.HandleFunc("/api/custom-blocks", a.handleCustomBlocks)
 	mux.HandleFunc("/api/health", a.handleHealth)
 	mux.HandleFunc("/api/config", a.handleConfig)
 	mux.HandleFunc("/ws", a.handleWebSocket)
@@ -123,11 +135,7 @@ func (a *API) handleBlocklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domains := a.firewall.Domains()
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"total":   len(domains),
-		"domains": domains,
-	})
+	http.Error(w, `{"error":"query parameter 'q' required"}`, http.StatusBadRequest)
 }
 
 func (a *API) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +147,50 @@ func (a *API) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(a.config)
+	json.NewEncoder(w).Encode(map[string]string{
+		"dns_addr": a.config.DNSAddr,
+		"api_addr": a.config.APIAddr,
+	})
+}
+
+func (a *API) handleCustomBlocks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		domains, _ := a.db.LoadCustomBlocks()
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"domains": domains,
+			"total":   len(domains),
+		})
+
+	case "POST":
+		var req struct {
+			Domain string `json:"domain"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Domain == "" {
+			http.Error(w, `{"error":"domain required"}`, http.StatusBadRequest)
+			return
+		}
+		a.firewall.AddCustom(req.Domain)
+		a.db.AddCustomBlock(req.Domain)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "domain": req.Domain})
+
+	case "DELETE":
+		var req struct {
+			Domain string `json:"domain"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Domain == "" {
+			http.Error(w, `{"error":"domain required"}`, http.StatusBadRequest)
+			return
+		}
+		a.firewall.RemoveCustom(req.Domain)
+		a.db.RemoveCustomBlock(req.Domain)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "domain": req.Domain})
+
+	default:
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+	}
 }
 
 func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
